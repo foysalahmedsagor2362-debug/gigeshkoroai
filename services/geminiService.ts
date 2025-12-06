@@ -6,7 +6,10 @@ import { SummaryResult } from "../types";
 const apiKey = process.env.API_KEY || '';
 
 if (!apiKey) {
-  console.warn("Gemini API Key is missing! Please set the API_KEY environment variable in your project settings.");
+  console.error("Gemini API Key is missing! Please set the API_KEY environment variable in your project settings.");
+} else {
+  // Debug log (masked) to confirm key is present
+  console.log(`Gemini Service initialized. Key present: ${apiKey.length > 0} (Starts with: ${apiKey.substring(0, 4)}...)`);
 }
 
 const ai = new GoogleGenAI({ apiKey });
