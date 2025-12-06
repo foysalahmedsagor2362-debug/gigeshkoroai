@@ -2,24 +2,19 @@ import { GoogleGenAI, Type, Chat } from "@google/genai";
 import { SummaryResult } from "../types";
 
 // Initialize the Gemini API client
-// Note: API Key must be provided in the environment variable.
-const apiKey = process.env.API_KEY || '';
-
-if (!apiKey) {
-  console.error("Gemini API Key is missing! Please set the API_KEY environment variable in your project settings.");
-} else {
-  // Debug log (masked) to confirm key is present
-  console.log(`Gemini Service initialized. Key present: ${apiKey.length > 0} (Starts with: ${apiKey.substring(0, 4)}...)`);
-}
-
-const ai = new GoogleGenAI({ apiKey });
+// The API key must be obtained exclusively from the environment variable process.env.API_KEY.
+// We use a fallback to allow the app to load even if the key is missing, 
+// then validate it inside the functions to provide user feedback.
+const apiKey = process.env.API_KEY || "";
+// Provide a dummy key if missing to prevent the SDK from throwing a "Key must not be empty" error during app initialization.
+const ai = new GoogleGenAI({ apiKey: apiKey || "dummy_key_to_load_app" });
 
 const MODEL_NAME = 'gemini-2.5-flash';
 
 // --- Chat Service ---
 
 export const createChatSession = (language: string = 'English'): Chat => {
-  if (!apiKey) {
+  if (!apiKey || apiKey === "dummy_key_to_load_app") {
     throw new Error("API_KEY_MISSING");
   }
 
@@ -66,7 +61,7 @@ export const fileToGenerativePart = async (file: File) => {
 // --- Summary Service ---
 
 export const generateSmartSummary = async (text: string): Promise<SummaryResult> => {
-  if (!apiKey) {
+  if (!apiKey || apiKey === "dummy_key_to_load_app") {
     throw new Error("API_KEY_MISSING");
   }
 

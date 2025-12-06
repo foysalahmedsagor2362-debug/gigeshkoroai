@@ -3,19 +3,28 @@ import react from '@vitejs/plugin-react';
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
-  // Fix: Cast process to any to avoid "Property 'cwd' does not exist on type 'Process'" error
+  // Load env file based on `mode` in the current working directory.
+  // Set the third parameter to '' to load all env regardless of the `VITE_` prefix.
   const env = loadEnv(mode, (process as any).cwd(), '');
 
-  // Robustly check for the API key in various likely locations
-  // 1. .env file with API_KEY
-  // 2. .env file with VITE_API_KEY
-  // 3. System environment API_KEY
-  // 4. System environment VITE_API_KEY
-  const apiKey = env.API_KEY || env.VITE_API_KEY || process.env.API_KEY || process.env.VITE_API_KEY || '';
+  // Search for the API key in all possible common environment variable names
+  const apiKey = 
+    env.API_KEY || 
+    env.VITE_API_KEY || 
+    env.GOOGLE_API_KEY || 
+    env.GEMINI_API_KEY || 
+    env.REACT_APP_API_KEY ||
+    env.NEXT_PUBLIC_API_KEY ||
+    process.env.API_KEY || 
+    process.env.VITE_API_KEY || 
+    process.env.GOOGLE_API_KEY || 
+    process.env.GEMINI_API_KEY || 
+    '';
 
   return {
     plugins: [react()],
     define: {
+      // Define process.env.API_KEY globally for the client build
       'process.env.API_KEY': JSON.stringify(apiKey)
     }
   };
