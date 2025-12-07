@@ -35,6 +35,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ incrementStats, language, 
   const chatSessionRef = useRef<Chat | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const lastRequestRef = useRef<{ text: string; attachment: File | null } | null>(null);
 
   const isLimitReached = questionsAskedCount >= DAILY_LIMIT;
 
@@ -81,41 +82,24 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ incrementStats, language, 
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const handleSendMessage = async () => {
-    if (isLimitReached) return;
-    if ((!input.trim() && !attachment) || !chatSessionRef.current) return;
+  const generateResponse = async (text: string, file: File | null) => {
+    if (!chatSessionRef.current) return;
 
-    const currentAttachment = attachment;
-    const userMsg: ChatMessage = {
-      id: Date.now().toString(),
-      role: 'user',
-      text: input,
-      timestamp: Date.now(),
-      attachment: currentAttachment ? { name: currentAttachment.name, type: currentAttachment.type } : undefined
-    };
-
-    setMessages(prev => [...prev, userMsg]);
-    setInput('');
-    setAttachment(null);
-    if (fileInputRef.current) fileInputRef.current.value = '';
-    
     setIsLoading(true);
-
     try {
       let result;
       
-      if (currentAttachment) {
+      if (file) {
         // Send file + text
-        const filePart = await fileToGenerativePart(currentAttachment);
-        const textPart = { text: userMsg.text || "Analyze this document/image." };
+        const filePart = await fileToGenerativePart(file);
+        const textPart = { text: text || "Analyze this document/image." };
         
-        // When sending parts, we must construct the message payload correctly
         result = await chatSessionRef.current.sendMessageStream({ 
           message: [textPart, filePart] as any 
         });
       } else {
         // Text only
-        result = await chatSessionRef.current.sendMessageStream({ message: userMsg.text });
+        result = await chatSessionRef.current.sendMessageStream({ message: text });
       }
       
       const botMsgId = (Date.now() + 1).toString();
@@ -163,6 +147,42 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ incrementStats, language, 
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleSendMessage = async () => {
+    if (isLimitReached) return;
+    if ((!input.trim() && !attachment) || !chatSessionRef.current) return;
+
+    const currentText = input;
+    const currentFile = attachment;
+
+    // Store for retry
+    lastRequestRef.current = { text: currentText, attachment: currentFile };
+
+    const userMsg: ChatMessage = {
+      id: Date.now().toString(),
+      role: 'user',
+      text: currentText,
+      timestamp: Date.now(),
+      attachment: currentFile ? { name: currentFile.name, type: currentFile.type } : undefined
+    };
+
+    setMessages(prev => [...prev, userMsg]);
+    setInput('');
+    setAttachment(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    
+    await generateResponse(currentText, currentFile);
+  };
+
+  const handleRetry = () => {
+    if (!lastRequestRef.current) return;
+    
+    // Remove the error message from UI
+    setMessages(prev => prev.filter(msg => !msg.isError));
+    
+    // Trigger generation again with cached input
+    generateResponse(lastRequestRef.current.text, lastRequestRef.current.attachment);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -249,6 +269,19 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ incrementStats, language, 
                   </div>
                 ) : (
                   <p className="whitespace-pre-wrap">{msg.text}</p>
+                )}
+                
+                {msg.isError && (
+                  <div className="mt-3 pt-3 border-t border-red-200/60 flex justify-end">
+                    <Button 
+                        variant="secondary" 
+                        onClick={handleRetry}
+                        className="h-8 text-xs bg-white border-red-200 text-red-700 hover:bg-red-100"
+                        icon={<RefreshCw size={12} />}
+                    >
+                        Retry
+                    </Button>
+                  </div>
                 )}
               </div>
             </div>

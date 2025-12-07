@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FileText, Upload, Copy, BookOpen, Layers, HelpCircle, AlertTriangle } from 'lucide-react';
+import { FileText, Upload, Copy, BookOpen, Layers, HelpCircle, AlertTriangle, RefreshCw } from 'lucide-react';
 import { GlassCard, Button } from './UIComponents';
 import { SummaryResult } from '../types';
 import { generateSmartSummary } from '../services/geminiService';
@@ -97,9 +97,18 @@ export const SummarizerPanel: React.FC<SummarizerPanelProps> = ({ incrementStats
         )}
 
         {error && (
-          <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-xs text-red-700">
-            <AlertTriangle size={16} />
-            {error}
+          <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center justify-between gap-2 text-xs text-red-700">
+            <div className="flex items-center gap-2">
+                <AlertTriangle size={16} />
+                <span>{error}</span>
+            </div>
+            <Button 
+                variant="secondary" 
+                onClick={handleSummarize}
+                className="h-7 px-3 text-xs bg-white border-red-200 text-red-700 hover:bg-red-100"
+            >
+                <RefreshCw size={12} className="mr-1" /> Retry
+            </Button>
           </div>
         )}
 
