@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
-import { Send, Bot, User, Sparkles, Paperclip, X, FileText, AlertTriangle, Image as ImageIcon, Lock, RefreshCw } from 'lucide-react';
+import { Send, Bot, User, Sparkles, Paperclip, X, FileText, AlertTriangle, Image as ImageIcon, Lock } from 'lucide-react';
 import { GlassCard, Button } from './UIComponents';
 import { ChatMessage } from '../types';
 import { createChatSession, fileToGenerativePart } from '../services/geminiService';
@@ -35,7 +35,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ incrementStats, language, 
   const chatSessionRef = useRef<Chat | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const lastRequestRef = useRef<{ text: string; attachment: File | null } | null>(null);
 
   const isLimitReached = questionsAskedCount >= DAILY_LIMIT;
 
@@ -156,9 +155,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ incrementStats, language, 
     const currentText = input;
     const currentFile = attachment;
 
-    // Store for retry
-    lastRequestRef.current = { text: currentText, attachment: currentFile };
-
     const userMsg: ChatMessage = {
       id: Date.now().toString(),
       role: 'user',
@@ -173,16 +169,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ incrementStats, language, 
     if (fileInputRef.current) fileInputRef.current.value = '';
     
     await generateResponse(currentText, currentFile);
-  };
-
-  const handleRetry = () => {
-    if (!lastRequestRef.current) return;
-    
-    // Remove the error message from UI
-    setMessages(prev => prev.filter(msg => !msg.isError));
-    
-    // Trigger generation again with cached input
-    generateResponse(lastRequestRef.current.text, lastRequestRef.current.attachment);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -269,19 +255,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ incrementStats, language, 
                   </div>
                 ) : (
                   <p className="whitespace-pre-wrap">{msg.text}</p>
-                )}
-                
-                {msg.isError && (
-                  <div className="mt-3 pt-3 border-t border-red-200/60 flex justify-end">
-                    <Button 
-                        variant="secondary" 
-                        onClick={handleRetry}
-                        className="h-8 text-xs bg-white border-red-200 text-red-700 hover:bg-red-100"
-                        icon={<RefreshCw size={12} />}
-                    >
-                        Retry
-                    </Button>
-                  </div>
                 )}
               </div>
             </div>
