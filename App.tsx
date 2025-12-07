@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { LayoutDashboard, MessageSquare, Sparkles, Atom } from 'lucide-react';
+import { LayoutDashboard, MessageSquare, Sparkles, Brain } from 'lucide-react';
 import { StudyStats, AppTab } from './types';
 import { TrackerPanel } from './components/TrackerPanel';
 import { ChatPanel } from './components/ChatPanel';
@@ -14,7 +14,7 @@ const initialStats: StudyStats = {
   lastStudyDate: new Date().toISOString().split('T')[0],
   goals: {
     studyMinutes: 120,
-    questions: 10,
+    questions: 50, // Updated goal to match daily limit
     summaries: 3
   }
 };
@@ -33,11 +33,19 @@ const App: React.FC = () => {
     localStorage.setItem('gemini-study-data', JSON.stringify(stats));
   }, [stats]);
 
-  // Check streak on load
+  // Check streak and reset daily counts on load
   useEffect(() => {
     const today = new Date().toISOString().split('T')[0];
     if (stats.lastStudyDate !== today) {
-      setStats(prev => ({ ...prev, lastStudyDate: today }));
+      setStats(prev => ({ 
+        ...prev, 
+        lastStudyDate: today,
+        // Reset daily counters
+        questionsAsked: 0,
+        summariesGenerated: 0,
+        // Basic streak logic (if consecutive days, keep streak, else reset to 1)
+        streak: prev.streak // Keeping streak simple for now, can be enhanced
+      }));
     }
   }, []);
 
@@ -67,11 +75,11 @@ const App: React.FC = () => {
       <header className="h-16 border-b border-slate-200 bg-white shadow-sm flex items-center justify-between px-6 z-50 shrink-0">
         <div className="flex items-center gap-3">
           <div className="bg-primary-600 p-2 rounded-lg text-white shadow-md shadow-primary-200">
-            <Atom size={24} />
+            <Brain size={24} />
           </div>
           <div>
             <h1 className="text-xl font-bold text-slate-900 tracking-tight uppercase">
-              GIGGESH KORO
+              JIGESH KORO
             </h1>
             <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">AI Study Companion</p>
           </div>
@@ -113,6 +121,7 @@ const App: React.FC = () => {
               incrementStats={incrementQuestions} 
               language={language} 
               setLanguage={setLanguage}
+              questionsAskedCount={stats.questionsAsked}
             />
           </div>
 
@@ -126,7 +135,7 @@ const App: React.FC = () => {
       
       {/* --- Footer --- */}
       <footer className="hidden md:block py-2 bg-white border-t border-slate-200 text-center text-[10px] text-slate-400 shrink-0">
-        <p>Powered by <span className="font-semibold text-primary-600">Google Gemini API</span>. GIGGESH KORO AI Assistant.</p>
+        <p>Powered by <span className="font-semibold text-primary-600">Google Gemini API</span>. JIGESHAI Assistant.</p>
       </footer>
 
       {/* --- Mobile Navigation Bar --- */}

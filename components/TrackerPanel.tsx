@@ -81,8 +81,13 @@ export const TrackerPanel: React.FC<TrackerPanelProps> = ({ stats, updateStats }
           />
         </div>
 
-        <div className="h-40 w-full relative">
-            <ResponsiveContainer width="100%" height="100%">
+        {/* 
+           Added min-width/min-height to container and ResponsiveContainer to prevent 
+           "width(-1) and height(-1) of chart should be greater than 0" warning 
+           when component is hidden via CSS (e.g. mobile tabs).
+        */}
+        <div className="h-40 w-full relative" style={{ minWidth: 0, minHeight: 0 }}>
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} debounce={50}>
               <PieChart>
                 <Pie
                   data={data}

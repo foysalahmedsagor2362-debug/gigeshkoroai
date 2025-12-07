@@ -29,9 +29,15 @@ export const SummarizerPanel: React.FC<SummarizerPanelProps> = ({ incrementStats
     } catch (error: any) {
       console.error("Summary error:", error);
       if (error.message === "API_KEY_MISSING") {
-        setError("Gemini API Key is missing. Please configure your environment variables.");
+        setError("Gemini API Key is missing. Please check Vercel settings.");
+      } else if (error.status === 429 || error.message?.includes('429')) {
+        setError("Limit Reached: Hourly usage limit exceeded. Try again later.");
+      } else if (error.status === 503 || error.status === 500) {
+        setError("Service Overloaded: AI is currently busy. Please retry.");
+      } else if (error.message?.includes('fetch') || error.message?.includes('Network')) {
+        setError("Network Error: Please check your internet.");
       } else {
-        setError("Failed to generate summary. Please check your content or connection.");
+        setError("Failed to generate summary. Please check your content.");
       }
     } finally {
       setIsLoading(false);
