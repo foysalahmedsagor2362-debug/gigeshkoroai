@@ -42,7 +42,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigateToLogin }) =
                     <span>The Future of Learning is Here</span>
                 </div>
                 <h1 className="text-5xl md:text-6xl font-extrabold text-slate-900 leading-[1.1] tracking-tight">
-                    Master Science & Math with <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary-600 to-indigo-600">AI Power</span>
+                    Master Physics, Chem, Bio & Math with <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary-600 to-indigo-600">AI Power</span>
                 </h1>
                 <p className="text-lg text-slate-600 leading-relaxed max-w-lg">
                     JigeshAI is your personal 24/7 tutor. Solve complex problems, summarize notes, and track your study habits in one futuristic platform.
