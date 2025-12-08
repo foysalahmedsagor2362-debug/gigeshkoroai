@@ -13,8 +13,15 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({ user, onClose }) => 
   const [selectedPlan, setSelectedPlan] = useState<'1_month' | '3_months'>('1_month');
   const [trxId, setTrxId] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [copied, setCopied] = useState(false);
 
-  const BKASH_NUMBER = "01700000000"; // Mock number
+  const BKASH_NUMBER = "01878691105";
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(BKASH_NUMBER);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,15 +79,31 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({ user, onClose }) => 
 
         {/* Payment Instructions */}
         <div className="bg-pink-50 border border-pink-100 rounded-xl p-4 mb-6">
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-bold text-pink-600 uppercase">Payment Method: bKash</span>
             <img src="https://freelogopng.com/images/all_img/1656234745bkash-app-logo-png.png" alt="bKash" className="h-5" />
           </div>
-          <p className="text-sm text-slate-700 mb-2">Send Money to this number:</p>
-          <div className="flex items-center gap-2 bg-white p-2 rounded border border-pink-100">
-            <span className="font-mono font-bold text-slate-800 flex-1">{BKASH_NUMBER}</span>
-            <button className="text-pink-500 hover:text-pink-700" title="Copy">
-              <Copy size={16} />
+          
+          <div className="flex items-center gap-2 mb-2">
+            <p className="text-sm text-slate-700">Personal Number:</p>
+            <span className="text-[10px] font-bold bg-pink-600 text-white px-2 py-0.5 rounded-full shadow-sm animate-pulse">Send Money Only</span>
+          </div>
+          
+          <div className="flex items-center gap-2 bg-white p-2 rounded-lg border border-pink-200 relative shadow-sm">
+            <span className="font-mono font-bold text-slate-800 text-lg flex-1 ml-2 tracking-wide">{BKASH_NUMBER}</span>
+            
+            {copied && (
+              <span className="text-[10px] font-bold text-green-600 mr-2 bg-green-50 px-2 py-1 rounded-md transition-all">
+                Copied!
+              </span>
+            )}
+            
+            <button 
+              onClick={handleCopy}
+              className={`p-2 rounded-lg transition-all ${copied ? 'bg-green-100 text-green-600' : 'bg-pink-50 text-pink-500 hover:bg-pink-100'}`} 
+              title="Copy Number"
+            >
+              {copied ? <Check size={18} /> : <Copy size={18} />}
             </button>
           </div>
         </div>
