@@ -6,6 +6,7 @@ import { Send, Bot, User, Sparkles, Paperclip, X, FileText, AlertTriangle, Image
 import { GlassCard, Button } from './UIComponents';
 import { ChatMessage } from '../types';
 import { createChatSession, fileToGenerativePart } from '../services/geminiService';
+import { getCurrentUser, checkQuestionLimit, incrementQuestionCount } from '../services/backend';
 import { Chat } from '@google/genai';
 
 interface ChatPanelProps {
@@ -15,15 +16,13 @@ interface ChatPanelProps {
   questionsAskedCount: number;
 }
 
-const DAILY_LIMIT = 50;
-
 export const ChatPanel: React.FC<ChatPanelProps> = ({ incrementStats, language, setLanguage, questionsAskedCount }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: 'welcome',
       role: 'model',
       text: language === 'English' 
-        ? "Hello! I am **JIGESHAI**, your personal AI Tutor. \n\nI can help you understand concepts in **Physics, Chemistry, Biology, and Math**. \n\nTry asking: $E=mc^2$ or $\\int x dx$"
+        ? "Hello! I am **JIGESHAI**. \n\nI can help you understand concepts in **Physics, Chemistry, Biology, and Math**. \n\nTry asking: $E=mc^2$ or $\\int x dx$"
         : "হ্যালো! আমি **জিজ্ঞাসএআই (JIGESHAI)**। আমি আপনার ব্যক্তিগত এআই শিক্ষক। \n\nআমি আপনাকে **পদার্থবিজ্ঞান, রসায়ন, জীববিজ্ঞান এবং গণিত** বুঝতে সাহায্য করতে পারি।",
       timestamp: Date.now()
     }
@@ -31,15 +30,19 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ incrementStats, language, 
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [attachment, setAttachment] = useState<File | null>(null);
+  const [limitStatus, setLimitStatus] = useState<{allowed: boolean, remaining: number | string}>({ allowed: true, remaining: 50 });
   
   const chatSessionRef = useRef<Chat | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const isLimitReached = questionsAskedCount >= DAILY_LIMIT;
-
-  // Initialize or Re-initialize chat when language changes
   useEffect(() => {
+    // Check limit on mount
+    const user = getCurrentUser();
+    if (user) {
+      setLimitStatus(checkQuestionLimit(user));
+    }
+
     try {
       chatSessionRef.current = createChatSession(language);
     } catch (e: any) {
@@ -48,7 +51,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ incrementStats, language, 
          setMessages(prev => [...prev, {
             id: 'system-error',
             role: 'model',
-            text: "⚠️ **System Error**: API Key is missing. Please check your deployment settings.",
+            text: "⚠️ **Configuration Error**: API Key is missing.\n\nPlease set **VITE_API_KEY** or **API_KEY** in your Vercel/Netlify project settings.",
             timestamp: Date.now(),
             isError: true
          }]);
@@ -67,7 +70,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ incrementStats, language, 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
-      // Accept PDF or Images
       if (file.type === 'application/pdf' || file.type.startsWith('image/')) {
         setAttachment(file);
       } else {
@@ -89,15 +91,12 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ incrementStats, language, 
       let result;
       
       if (file) {
-        // Send file + text
         const filePart = await fileToGenerativePart(file);
         const textPart = { text: text || "Analyze this document/image." };
-        
         result = await chatSessionRef.current.sendMessageStream({ 
           message: [textPart, filePart] as any 
         });
       } else {
-        // Text only
         result = await chatSessionRef.current.sendMessageStream({ message: text });
       }
       
@@ -105,7 +104,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ incrementStats, language, 
       setMessages(prev => [...prev, {
         id: botMsgId,
         role: 'model',
-        text: '', // Start empty
+        text: '',
         timestamp: Date.now()
       }]);
 
@@ -119,21 +118,27 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ incrementStats, language, 
           ));
         }
       }
-      incrementStats();
+      
+      // Update backend counts
+      const u = getCurrentUser();
+      if (u) {
+        incrementQuestionCount(u);
+        setLimitStatus(checkQuestionLimit(u));
+        incrementStats();
+      }
+
     } catch (error: any) {
       console.error("Chat error:", error);
       let errorMessage = "An unexpected error occurred. Please try again.";
       
       if (error.message === "API_KEY_MISSING") {
-        errorMessage = "⚠️ **Config Error**: Gemini API Key is missing in Vercel environment variables.";
-      } else if (error.status === 429 || error.message?.includes('429')) {
-        errorMessage = "⏳ **Limit Reached**: You have hit the hourly usage limit for the Gemini API. Please take a study break and try again later!";
+        errorMessage = "⚠️ **Config Error**: Gemini API Key is missing.";
+      } else if (error.status === 429) {
+        errorMessage = "⏳ **Limit Reached**: Hourly usage limit exceeded.";
       } else if (error.status === 503 || error.status === 500) {
-        errorMessage = "🔧 **Service Overloaded**: The AI service is currently busy or experiencing issues. Please try again in a moment.";
-      } else if (error.message?.includes('fetch') || error.message?.includes('Network')) {
+        errorMessage = "🔧 **Service Overloaded**: The AI service is currently busy.";
+      } else if (error.message?.includes('fetch')) {
         errorMessage = "📡 **Network Error**: Please check your internet connection.";
-      } else if (error.message?.includes('safety') || error.message?.includes('blocked')) {
-        errorMessage = "🛡️ **Safety Block**: The response was blocked due to safety guidelines. Please rephrase your question.";
       }
 
       setMessages(prev => [...prev, {
@@ -149,7 +154,14 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ incrementStats, language, 
   };
 
   const handleSendMessage = async () => {
-    if (isLimitReached) return;
+    // 1. Check limit before sending
+    const u = getCurrentUser();
+    if (u) {
+      const status = checkQuestionLimit(u);
+      setLimitStatus(status);
+      if (!status.allowed) return; // Block
+    }
+
     if ((!input.trim() && !attachment) || !chatSessionRef.current) return;
 
     const currentText = input;
@@ -179,9 +191,9 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ incrementStats, language, 
   };
 
   return (
-    <GlassCard className="h-full flex flex-col p-0 border-primary-200" active>
+    <GlassCard className="h-full flex flex-col p-0 border-primary-200 shadow-sm" active>
       {/* Header */}
-      <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-white">
+      <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-white rounded-t-2xl">
         <div className="flex items-center gap-3">
           <div className="bg-primary-50 p-2 rounded-lg border border-primary-100">
              <Bot className="text-primary-600" size={20} />
@@ -190,27 +202,11 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ incrementStats, language, 
             <h2 className="font-bold text-slate-800">JIGESHAI</h2>
             <div className="flex items-center gap-2">
               <p className="text-xs text-slate-500">{language === 'English' ? 'Science & Math Tutor' : 'বিজ্ঞান ও গণিত শিক্ষক'}</p>
-              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${isLimitReached ? 'bg-red-100 text-red-600' : 'bg-slate-100 text-slate-600'}`}>
-                {questionsAskedCount}/{DAILY_LIMIT}
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${!limitStatus.allowed ? 'bg-red-100 text-red-600' : 'bg-slate-100 text-slate-600'}`}>
+                Limit: {limitStatus.remaining}
               </span>
             </div>
           </div>
-        </div>
-        
-        {/* Language Toggle for Mobile/Tablet context */}
-        <div className="md:hidden flex bg-slate-100 rounded-lg p-1">
-             <button 
-                  onClick={() => setLanguage('English')}
-                  className={`px-2 py-1 rounded-md text-[10px] transition-all ${language === 'English' ? 'bg-white text-primary-600 shadow-sm font-bold' : 'text-slate-500'}`}
-                >
-                  ENG
-                </button>
-                <button 
-                  onClick={() => setLanguage('Bangla')}
-                  className={`px-2 py-1 rounded-md text-[10px] transition-all ${language === 'Bangla' ? 'bg-white text-primary-600 shadow-sm font-bold' : 'text-slate-500'}`}
-                >
-                  BN
-                </button>
         </div>
       </div>
 
@@ -281,11 +277,14 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ incrementStats, language, 
       </div>
 
       {/* Input Area */}
-      <div className="p-4 border-t border-slate-200 bg-white">
-        {isLimitReached ? (
-          <div className="flex items-center justify-center gap-2 p-3 bg-red-50 text-red-700 rounded-xl border border-red-100">
-            <Lock size={16} />
-            <span className="text-sm font-medium">Daily limit of {DAILY_LIMIT} questions reached.</span>
+      <div className="p-4 border-t border-slate-200 bg-white rounded-b-2xl">
+        {!limitStatus.allowed ? (
+          <div className="flex flex-col items-center justify-center gap-2 p-4 bg-red-50 text-red-700 rounded-xl border border-red-100 text-center">
+            <div className="flex items-center gap-2">
+              <Lock size={16} />
+              <span className="text-sm font-bold">Daily Limit Reached (50/50)</span>
+            </div>
+            <p className="text-xs">Upgrade to Premium to continue asking questions today.</p>
           </div>
         ) : (
           <>
@@ -320,7 +319,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ incrementStats, language, 
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder={language === 'English' ? "Ask a question or send a photo..." : "একটি প্রশ্ন জিজ্ঞাসা করুন বা ছবি পাঠান..."}
+                placeholder={language === 'English' ? "Ask a question..." : "প্রশ্ন জিজ্ঞাসা করুন..."}
                 className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 resize-none h-[52px] scrollbar-hide text-sm"
                 disabled={isLoading}
               />
@@ -333,7 +332,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ incrementStats, language, 
               </Button>
             </div>
             <p className="text-center text-[10px] text-slate-400 mt-2">
-              {language === 'English' ? 'Upload PDF or Photos for analysis.' : 'বিশ্লেষণের জন্য পিডিএফ বা ছবি আপলোড করুন।'}
+              Questions remaining today: {limitStatus.remaining}
             </p>
           </>
         )}

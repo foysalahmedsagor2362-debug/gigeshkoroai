@@ -9,10 +9,19 @@ const getApiKey = (): string => {
   if (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_API_KEY) {
     return (import.meta as any).env.VITE_API_KEY;
   }
+  
   // 2. Check process.env (Injected via vite.config.ts define)
-  if (typeof process !== 'undefined' && process.env?.API_KEY) {
-    return process.env.API_KEY;
+  // We use a try-catch block because Vite replaces 'process.env.API_KEY' with a string literal.
+  // We must NOT check 'typeof process' here because 'process' is undefined in the browser,
+  // preventing us from accessing the replaced string literal.
+  try {
+    // @ts-ignore
+    const key = process.env.API_KEY;
+    if (key) return key;
+  } catch (e) {
+    // Ignore ReferenceError if process is not defined and replacement didn't happen
   }
+  
   return "";
 };
 
