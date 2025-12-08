@@ -1,4 +1,4 @@
-import { GoogleGenAI, Type, Chat } from "@google/genai";
+import { GoogleGenAI, Type, Chat, Content } from "@google/genai";
 import { SummaryResult } from "../types";
 
 // --- API Key Management ---
@@ -11,15 +11,12 @@ const getApiKey = (): string => {
   }
   
   // 2. Check process.env (Injected via vite.config.ts define)
-  // We use a try-catch block because Vite replaces 'process.env.API_KEY' with a string literal.
-  // We must NOT check 'typeof process' here because 'process' is undefined in the browser,
-  // preventing us from accessing the replaced string literal.
   try {
     // @ts-ignore
     const key = process.env.API_KEY;
     if (key) return key;
   } catch (e) {
-    // Ignore ReferenceError if process is not defined and replacement didn't happen
+    // Ignore ReferenceError
   }
   
   return "";
@@ -27,20 +24,20 @@ const getApiKey = (): string => {
 
 const apiKey = getApiKey();
 // Initialize with the key if present, or a dummy string to prevent immediate crash on load.
-// We guard actual calls with checks later.
 const ai = new GoogleGenAI({ apiKey: apiKey || "dummy_key_to_load_app" });
 
 const MODEL_NAME = 'gemini-2.5-flash';
 
 // --- Chat Service ---
 
-export const createChatSession = (language: string = 'English'): Chat => {
+export const createChatSession = (language: string = 'English', history: Content[] = []): Chat => {
   if (!apiKey || apiKey === "dummy_key_to_load_app") {
     throw new Error("API_KEY_MISSING");
   }
 
   return ai.chats.create({
     model: MODEL_NAME,
+    history: history,
     config: {
       systemInstruction: `You are "JIGESHAI", an advanced AI Tutor dedicated to helping students master Science and Mathematics.
 
@@ -107,7 +104,6 @@ export const generateSmartSummary = async (text: string): Promise<SummaryResult>
   """
   `;
 
-  // Define the schema for the structured output
   const response = await ai.models.generateContent({
     model: MODEL_NAME,
     contents: prompt,

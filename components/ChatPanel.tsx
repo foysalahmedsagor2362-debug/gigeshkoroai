@@ -2,12 +2,12 @@ import React, { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
-import { Send, Bot, User, Sparkles, Paperclip, X, FileText, AlertTriangle, Image as ImageIcon, Lock } from 'lucide-react';
+import { Send, Bot, User, Paperclip, X, FileText, AlertTriangle, Image as ImageIcon, Lock, Trash2, Bold, Italic, Code, Sigma, Eye, EyeOff, History, Clock } from 'lucide-react';
 import { GlassCard, Button } from './UIComponents';
 import { ChatMessage } from '../types';
 import { createChatSession, fileToGenerativePart } from '../services/geminiService';
 import { getCurrentUser, checkQuestionLimit, incrementQuestionCount } from '../services/backend';
-import { Chat } from '@google/genai';
+import { Chat, Content } from '@google/genai';
 
 interface ChatPanelProps {
   incrementStats: () => void;
@@ -17,34 +17,72 @@ interface ChatPanelProps {
 }
 
 export const ChatPanel: React.FC<ChatPanelProps> = ({ incrementStats, language, setLanguage, questionsAskedCount }) => {
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
+  // Load chat history from localStorage or initialize default
+  const [messages, setMessages] = useState<ChatMessage[]>(() => {
+    try {
+      const saved = localStorage.getItem('jigesh_chat_history');
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch (e) {
+      console.error("Failed to load chat history", e);
+    }
+    
+    return [{
       id: 'welcome',
       role: 'model',
       text: language === 'English' 
         ? "Hello! I am **JIGESHAI**. \n\nI can help you understand concepts in **Physics, Chemistry, Biology, and Math**. \n\nTry asking: $E=mc^2$ or $\\int x dx$"
         : "হ্যালো! আমি **জিজ্ঞাসএআই (JIGESHAI)**। আমি আপনার ব্যক্তিগত এআই শিক্ষক। \n\nআমি আপনাকে **পদার্থবিজ্ঞান, রসায়ন, জীববিজ্ঞান এবং গণিত** বুঝতে সাহায্য করতে পারি।",
       timestamp: Date.now()
+    }];
+  });
+
+  // Search History State
+  const [searchHistory, setSearchHistory] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('jigesh_search_history');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
     }
-  ]);
+  });
+  const [showHistory, setShowHistory] = useState(false);
+
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [attachment, setAttachment] = useState<File | null>(null);
   const [limitStatus, setLimitStatus] = useState<{allowed: boolean, remaining: number | string}>({ allowed: true, remaining: 50 });
+  const [showPreview, setShowPreview] = useState(false);
   
   const chatSessionRef = useRef<Chat | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
+  // Save chat history whenever messages change
   useEffect(() => {
-    // Check limit on mount
+    localStorage.setItem('jigesh_chat_history', JSON.stringify(messages));
+    scrollToBottom();
+  }, [messages]);
+
+  // Check limits and Initialize Chat Session with History
+  useEffect(() => {
     const user = getCurrentUser();
     if (user) {
       setLimitStatus(checkQuestionLimit(user));
     }
 
     try {
-      chatSessionRef.current = createChatSession(language);
+      // Reconstruct history for Gemini context
+      const history: Content[] = messages
+        .filter(m => !m.isError && m.id !== 'welcome' && m.id !== 'system-error')
+        .map(m => ({
+          role: m.role,
+          parts: [{ text: m.text }]
+        }));
+
+      chatSessionRef.current = createChatSession(language, history);
     } catch (e: any) {
       console.error("Failed to init chat:", e);
       if (e.message === "API_KEY_MISSING") {
@@ -57,14 +95,49 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ incrementStats, language, 
          }]);
       }
     }
-  }, [language]);
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+  }, [language]); // Re-initialize if language changes
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const handleClearChat = () => {
+    if (window.confirm(language === 'English' ? "Clear conversation history?" : "কথপোকথনের ইতিহাস মুছে ফেলবেন?")) {
+      const welcomeMsg: ChatMessage = {
+        id: 'welcome',
+        role: 'model',
+        text: language === 'English' 
+          ? "Hello! I am **JIGESHAI**. \n\nI can help you understand concepts in **Physics, Chemistry, Biology, and Math**."
+          : "হ্যালো! আমি **জিজ্ঞাসএআই (JIGESHAI)**।",
+        timestamp: Date.now()
+      };
+      setMessages([welcomeMsg]);
+      localStorage.removeItem('jigesh_chat_history');
+      chatSessionRef.current = createChatSession(language, []);
+    }
+  };
+
+  const addToHistory = (text: string) => {
+    if (!text.trim()) return;
+    setSearchHistory(prev => {
+      // Remove duplicate if exists, add new to top, keep last 15
+      const newHistory = [text, ...prev.filter(h => h !== text)].slice(0, 15);
+      localStorage.setItem('jigesh_search_history', JSON.stringify(newHistory));
+      return newHistory;
+    });
+  };
+
+  const handleClearHistory = () => {
+    if (window.confirm("Clear search history?")) {
+      setSearchHistory([]);
+      localStorage.removeItem('jigesh_search_history');
+    }
+  };
+
+  const selectHistoryItem = (text: string) => {
+    setInput(text);
+    setShowHistory(false);
+    inputRef.current?.focus();
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -83,10 +156,39 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ incrementStats, language, 
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
+  const insertText = (before: string, after: string = '') => {
+    const textarea = inputRef.current;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const text = textarea.value;
+    
+    const newText = text.substring(0, start) + before + text.substring(start, end) + after + text.substring(end);
+    
+    setInput(newText);
+    
+    setTimeout(() => {
+        textarea.focus();
+        textarea.setSelectionRange(start + before.length, end + before.length);
+    }, 0);
+  };
+
   const generateResponse = async (text: string, file: File | null) => {
     if (!chatSessionRef.current) return;
 
     setIsLoading(true);
+    setShowPreview(false); // Switch back to edit mode on send
+    
+    // Optimistic UI
+    const botMsgId = (Date.now() + 1).toString();
+    setMessages(prev => [...prev, {
+      id: botMsgId,
+      role: 'model',
+      text: '', // Start empty
+      timestamp: Date.now()
+    }]);
+
     try {
       let result;
       
@@ -100,14 +202,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ incrementStats, language, 
         result = await chatSessionRef.current.sendMessageStream({ message: text });
       }
       
-      const botMsgId = (Date.now() + 1).toString();
-      setMessages(prev => [...prev, {
-        id: botMsgId,
-        role: 'model',
-        text: '',
-        timestamp: Date.now()
-      }]);
-
       let fullText = '';
       for await (const chunk of result) {
         const chunkText = chunk.text;
@@ -119,7 +213,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ incrementStats, language, 
         }
       }
       
-      // Update backend counts
       const u = getCurrentUser();
       if (u) {
         incrementQuestionCount(u);
@@ -141,31 +234,30 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ incrementStats, language, 
         errorMessage = "📡 **Network Error**: Please check your internet connection.";
       }
 
-      setMessages(prev => [...prev, {
-        id: Date.now().toString(),
-        role: 'model',
-        text: errorMessage,
-        timestamp: Date.now(),
-        isError: true
-      }]);
+      setMessages(prev => prev.map(msg => 
+        msg.id === botMsgId ? { ...msg, text: errorMessage, isError: true } : msg
+      ));
     } finally {
       setIsLoading(false);
+      setTimeout(() => inputRef.current?.focus(), 100);
     }
   };
 
   const handleSendMessage = async () => {
-    // 1. Check limit before sending
     const u = getCurrentUser();
     if (u) {
       const status = checkQuestionLimit(u);
       setLimitStatus(status);
-      if (!status.allowed) return; // Block
+      if (!status.allowed) return; 
     }
 
     if ((!input.trim() && !attachment) || !chatSessionRef.current) return;
 
     const currentText = input;
     const currentFile = attachment;
+
+    // Save to history
+    if (currentText) addToHistory(currentText);
 
     const userMsg: ChatMessage = {
       id: Date.now().toString(),
@@ -193,7 +285,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ incrementStats, language, 
   return (
     <GlassCard className="h-full flex flex-col p-0 border-primary-200 shadow-sm" active>
       {/* Header */}
-      <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-white rounded-t-2xl">
+      <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-white rounded-t-2xl z-10 relative">
         <div className="flex items-center gap-3">
           <div className="bg-primary-50 p-2 rounded-lg border border-primary-100">
              <Bot className="text-primary-600" size={20} />
@@ -203,11 +295,19 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ incrementStats, language, 
             <div className="flex items-center gap-2">
               <p className="text-xs text-slate-500">{language === 'English' ? 'Science & Math Tutor' : 'বিজ্ঞান ও গণিত শিক্ষক'}</p>
               <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${!limitStatus.allowed ? 'bg-red-100 text-red-600' : 'bg-slate-100 text-slate-600'}`}>
-                Limit: {limitStatus.remaining}
+                {limitStatus.allowed ? `${limitStatus.remaining} left` : 'Limit Reached'}
               </span>
             </div>
           </div>
         </div>
+        
+        <button 
+          onClick={handleClearChat}
+          className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+          title="Clear Conversation"
+        >
+          <Trash2 size={18} />
+        </button>
       </div>
 
       {/* Messages Area */}
@@ -223,16 +323,18 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ incrementStats, language, 
                </div>
             )}
 
-            <div className="flex flex-col gap-1 max-w-[85%]">
+            <div className="flex flex-col gap-1 max-w-[85%] lg:max-w-[75%]">
               {msg.attachment && (
                 <div className={`p-2 rounded-lg border flex items-center gap-2 mb-1 self-end ${msg.role === 'user' ? 'bg-primary-700 border-primary-600 text-white' : 'bg-white border-slate-200'}`}>
                   {msg.attachment.type.startsWith('image/') ? <ImageIcon size={16} /> : <FileText size={16} />}
                   <span className="text-xs truncate max-w-[150px]">{msg.attachment.name}</span>
                 </div>
               )}
+              
+              {/* Message Bubble */}
               <div 
                 className={`
-                  rounded-2xl p-4 shadow-sm
+                  rounded-2xl p-4 shadow-sm relative group
                   ${msg.role === 'user' 
                     ? 'bg-primary-600 text-white rounded-tr-none' 
                     : 'bg-white text-slate-800 border border-slate-200 rounded-tl-none'
@@ -240,7 +342,14 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ incrementStats, language, 
                   ${msg.isError ? 'border-red-200 bg-red-50 text-red-800' : ''}
                 `}
               >
-                {msg.role === 'model' ? (
+                {msg.role === 'model' && !msg.text && !msg.isError ? (
+                  /* Loading state */
+                  <div className="flex items-center gap-2">
+                     <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce"></span>
+                     <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce delay-75"></span>
+                     <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce delay-150"></span>
+                  </div>
+                ) : msg.role === 'model' ? (
                   <div className="prose prose-sm max-w-none prose-slate">
                     <ReactMarkdown 
                       remarkPlugins={[remarkMath]} 
@@ -250,7 +359,14 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ incrementStats, language, 
                     </ReactMarkdown>
                   </div>
                 ) : (
-                  <p className="whitespace-pre-wrap">{msg.text}</p>
+                  <div className="prose prose-sm max-w-none prose-invert">
+                    <ReactMarkdown 
+                        remarkPlugins={[remarkMath]} 
+                        rehypePlugins={[rehypeKatex]}
+                    >
+                        {msg.text}
+                    </ReactMarkdown>
+                  </div>
                 )}
               </div>
             </div>
@@ -262,22 +378,39 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ incrementStats, language, 
             )}
           </div>
         ))}
-        {isLoading && (
-          <div className="flex justify-start gap-3">
-             <div className="w-8 h-8 rounded-full bg-primary-100 flex items-center justify-center shrink-0">
-                <Bot size={14} className="text-primary-600" />
-             </div>
-            <div className="bg-white rounded-2xl rounded-tl-none p-4 border border-slate-200 shadow-sm flex items-center gap-2">
-              <Sparkles className="text-primary-500 animate-pulse" size={16} />
-              <span className="text-xs text-slate-500 font-medium">{language === 'English' ? 'Thinking...' : 'ভাবছি...'}</span>
-            </div>
-          </div>
-        )}
         <div ref={messagesEndRef} />
       </div>
 
       {/* Input Area */}
-      <div className="p-4 border-t border-slate-200 bg-white rounded-b-2xl">
+      <div className="p-4 border-t border-slate-200 bg-white rounded-b-2xl z-10 relative">
+        {showHistory && (
+          <>
+            <div className="fixed inset-0 z-10" onClick={() => setShowHistory(false)}></div>
+            <div className="absolute bottom-full left-4 mb-2 w-64 max-h-60 overflow-y-auto bg-white border border-slate-200 rounded-xl shadow-lg z-20 animate-in fade-in slide-in-from-bottom-2">
+               <div className="p-2 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white">
+                  <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1"><History size={12}/> Recent</span>
+                  <button onClick={handleClearHistory} className="text-[10px] text-red-500 hover:text-red-600 font-medium">Clear All</button>
+               </div>
+               {searchHistory.length === 0 ? (
+                  <div className="p-4 text-center text-xs text-slate-400 italic">No history yet</div>
+               ) : (
+                 <div className="py-1">
+                   {searchHistory.map((item, idx) => (
+                     <button 
+                        key={idx}
+                        onClick={() => selectHistoryItem(item)}
+                        className="w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2 truncate transition-colors"
+                     >
+                        <Clock size={12} className="text-slate-400 shrink-0" />
+                        <span className="truncate">{item}</span>
+                     </button>
+                   ))}
+                 </div>
+               )}
+            </div>
+          </>
+        )}
+
         {!limitStatus.allowed ? (
           <div className="flex flex-col items-center justify-center gap-2 p-4 bg-red-50 text-red-700 rounded-xl border border-red-100 text-center">
             <div className="flex items-center gap-2">
@@ -287,9 +420,34 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ incrementStats, language, 
             <p className="text-xs">Upgrade to Premium to continue asking questions today.</p>
           </div>
         ) : (
-          <>
+          <div className="space-y-3">
+             {/* Formatting Toolbar */}
+             <div className="flex items-center justify-between px-1">
+                <div className="flex items-center gap-1">
+                   <button onClick={() => insertText('**', '**')} className="p-1.5 text-slate-400 hover:text-primary-600 hover:bg-primary-50 rounded transition-colors" title="Bold"><Bold size={14} /></button>
+                   <button onClick={() => insertText('*', '*')} className="p-1.5 text-slate-400 hover:text-primary-600 hover:bg-primary-50 rounded transition-colors" title="Italic"><Italic size={14} /></button>
+                   <button onClick={() => insertText('$', '$')} className="p-1.5 text-slate-400 hover:text-primary-600 hover:bg-primary-50 rounded transition-colors" title="Math (LaTeX)"><Sigma size={14} /></button>
+                   <button onClick={() => insertText('`', '`')} className="p-1.5 text-slate-400 hover:text-primary-600 hover:bg-primary-50 rounded transition-colors" title="Code"><Code size={14} /></button>
+                   <div className="w-px h-4 bg-slate-200 mx-1"></div>
+                   <button 
+                      onClick={() => setShowHistory(!showHistory)} 
+                      className={`p-1.5 rounded transition-colors ${showHistory ? 'text-primary-600 bg-primary-50' : 'text-slate-400 hover:text-primary-600 hover:bg-primary-50'}`} 
+                      title="Search History"
+                   >
+                     <History size={14} />
+                   </button>
+                </div>
+                <button 
+                  onClick={() => setShowPreview(!showPreview)} 
+                  className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium transition-colors ${showPreview ? 'bg-primary-100 text-primary-700' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'}`}
+                >
+                   {showPreview ? <EyeOff size={14} /> : <Eye size={14} />}
+                   <span>{showPreview ? 'Edit' : 'Preview'}</span>
+                </button>
+             </div>
+
             {attachment && (
-              <div className="flex items-center gap-2 mb-2 bg-slate-100 p-2 rounded-lg w-fit">
+              <div className="flex items-center gap-2 bg-slate-100 p-2 rounded-lg w-fit">
                 <div className="bg-white p-1 rounded border border-slate-200">
                   {attachment.type.startsWith('image/') ? <ImageIcon size={14} className="text-blue-500" /> : <FileText size={14} className="text-red-500" />}
                 </div>
@@ -299,7 +457,8 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ incrementStats, language, 
                 </button>
               </div>
             )}
-            <div className="flex gap-2 items-end">
+
+            <div className="flex gap-2 items-start">
               <input 
                 type="file" 
                 ref={fileInputRef}
@@ -309,32 +468,49 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ incrementStats, language, 
               />
               <Button 
                 variant="secondary"
-                className="h-[52px] w-[52px] !p-0 rounded-xl"
+                className="h-[52px] w-[52px] !p-0 rounded-xl shrink-0"
                 onClick={() => fileInputRef.current?.click()}
                 title="Upload PDF or Photo"
               >
                 <Paperclip size={20} className="text-slate-500" />
               </Button>
-              <textarea
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder={language === 'English' ? "Ask a question..." : "প্রশ্ন জিজ্ঞাসা করুন..."}
-                className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 resize-none h-[52px] scrollbar-hide text-sm"
-                disabled={isLoading}
-              />
+              
+              <div className="flex-1 relative">
+                {showPreview ? (
+                   <div className="w-full h-[80px] overflow-y-auto bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-800 text-sm prose prose-sm max-w-none">
+                      {input.trim() ? (
+                        <ReactMarkdown 
+                          remarkPlugins={[remarkMath]} 
+                          rehypePlugins={[rehypeKatex]}
+                        >
+                          {input}
+                        </ReactMarkdown>
+                      ) : (
+                        <span className="text-slate-400 italic">Preview will appear here...</span>
+                      )}
+                   </div>
+                ) : (
+                  <textarea
+                    ref={inputRef}
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    placeholder={language === 'English' ? "Ask a question about Math, Physics..." : "গণিত বা বিজ্ঞান সম্পর্কে প্রশ্ন করুন..."}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 resize-none h-[80px] scrollbar-hide text-sm block"
+                    disabled={isLoading}
+                  />
+                )}
+              </div>
+
               <Button 
                 onClick={handleSendMessage} 
                 disabled={(!input.trim() && !attachment) || isLoading}
-                className="h-[52px] w-[52px] !p-0 rounded-xl shadow-none"
+                className="h-[52px] w-[52px] !p-0 rounded-xl shadow-none shrink-0"
               >
-                <Send size={20} />
+                {isLoading ? <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"/> : <Send size={20} />}
               </Button>
             </div>
-            <p className="text-center text-[10px] text-slate-400 mt-2">
-              Questions remaining today: {limitStatus.remaining}
-            </p>
-          </>
+          </div>
         )}
       </div>
     </GlassCard>
