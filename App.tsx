@@ -5,7 +5,6 @@ import { TrackerPanel } from './components/TrackerPanel';
 import { ChatPanel } from './components/ChatPanel';
 import { SummarizerPanel } from './components/SummarizerPanel';
 import { ProfilePanel } from './components/ProfilePanel';
-import { LandingPage } from './components/LandingPage';
 import { getCurrentUser } from './services/backend';
 import { Logo } from './components/UIComponents';
 
@@ -24,7 +23,7 @@ const initialStats: StudyStats = {
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User>(getCurrentUser());
-  const [showLanding, setShowLanding] = useState(true);
+  // Removed showLanding state to load app directly
   const [activeTab, setActiveTab] = useState<AppTab>(AppTab.CHAT);
   const [language, setLanguage] = useState<'English' | 'Bangla'>('English');
   
@@ -50,26 +49,16 @@ const App: React.FC = () => {
     }
   }, []);
 
-  const handleStartApp = () => {
-    setShowLanding(false);
-  };
-
   const updateStats = (newStats: StudyStats) => setStats(newStats);
   const incrementQuestions = () => setStats(prev => ({ ...prev, questionsAsked: prev.questionsAsked + 1 }));
   const incrementSummaries = () => setStats(prev => ({ ...prev, summariesGenerated: prev.summariesGenerated + 1 }));
 
-  // 1. Landing Page
-  if (showLanding) {
-      return <LandingPage onStartApp={handleStartApp} />;
-  }
-
-  // 2. Main App
   return (
     <div className="flex h-screen bg-slate-50 font-sans text-slate-800 overflow-hidden">
       
       {/* --- Sidebar (Desktop) --- */}
       <aside className="hidden md:flex w-64 flex-col border-r border-slate-200 bg-white p-4 shrink-0 z-20 shadow-sm">
-        <div className="flex items-center gap-3 px-2 mb-8 mt-2 cursor-pointer" onClick={() => setShowLanding(true)}>
+        <div className="flex items-center gap-3 px-2 mb-8 mt-2 cursor-pointer">
           <Logo size={42} className="shadow-md shadow-primary-200 rounded-xl" />
           <div>
             <h1 className="text-lg font-bold text-slate-800 tracking-tight leading-none">JIGESH</h1>
@@ -128,14 +117,6 @@ const App: React.FC = () => {
              <div className="flex items-center gap-2">
                 <Logo size={32} className="rounded-lg" />
                 <span className="font-bold text-slate-800 tracking-tight">JIGESH</span>
-             </div>
-             <div className="flex items-center gap-2">
-               <button 
-                  onClick={() => setLanguage(l => l === 'English' ? 'Bangla' : 'English')}
-                  className="text-xs font-mono px-2 py-1 rounded bg-slate-100 text-slate-600 border border-slate-200"
-               >
-                  {language === 'English' ? 'ENG' : 'BN'}
-               </button>
              </div>
         </header>
 

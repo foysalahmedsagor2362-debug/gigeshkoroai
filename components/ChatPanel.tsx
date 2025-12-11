@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
-import { Send, Bot, User, Paperclip, X, FileText, AlertTriangle, Image as ImageIcon, Trash2, Bold, Italic, Code, Sigma, Eye, EyeOff, History, Clock } from 'lucide-react';
+import { Send, Bot, User, Paperclip, X, FileText, AlertTriangle, Image as ImageIcon, Trash2, Bold, Italic, Code, Sigma, Eye, EyeOff, History, Clock, Globe } from 'lucide-react';
 import { GlassCard, Button } from './UIComponents';
 import { ChatMessage } from '../types';
 import { createChatSession, fileToGenerativePart } from '../services/geminiService';
@@ -32,8 +32,8 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ incrementStats, language, 
       id: 'welcome',
       role: 'model',
       text: language === 'English' 
-        ? "Hello! I am **JIGESHAI**. \n\nI can help you understand concepts in **Physics, Chemistry, Biology, and Math**. \n\nTry asking: $E=mc^2$ or $\\int x dx$"
-        : "হ্যালো! আমি **জিজ্ঞাসএআই (JIGESHAI)**। আমি আপনার ব্যক্তিগত এআই শিক্ষক। \n\nআমি আপনাকে **পদার্থবিজ্ঞান, রসায়ন, জীববিজ্ঞান এবং গণিত** বুঝতে সাহায্য করতে পারি।",
+        ? "Hello! I am **JIGESHAI**. \n\nI can help you understand concepts in **Physics, Chemistry, Biology, Math, ICT, Bangla, and English**. \n\nTry asking: $E=mc^2$ or $\\int x dx$"
+        : "হ্যালো! আমি **জিজ্ঞাসএআই (JIGESHAI)**। আমি আপনার ব্যক্তিগত এআই শিক্ষক। \n\nআমি আপনাকে **পদার্থবিজ্ঞান, রসায়ন, জীববিজ্ঞান, গণিত, আইসিটি, বাংলা এবং ইংরেজি** বুঝতে সাহায্য করতে পারি।",
       timestamp: Date.now()
     }];
   });
@@ -101,7 +101,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ incrementStats, language, 
         id: 'welcome',
         role: 'model',
         text: language === 'English' 
-          ? "Hello! I am **JIGESHAI**. \n\nI can help you understand concepts in **Physics, Chemistry, Biology, and Math**."
+          ? "Hello! I am **JIGESHAI**. \n\nI can help you understand concepts in **Physics, Chemistry, Biology, Math, ICT, Bangla, and English**."
           : "হ্যালো! আমি **জিজ্ঞাসএআই (JIGESHAI)**।",
         timestamp: Date.now()
       };
@@ -109,6 +109,10 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ incrementStats, language, 
       localStorage.removeItem('jigesh_chat_history');
       chatSessionRef.current = createChatSession(language, []);
     }
+  };
+
+  const toggleLanguage = () => {
+    setLanguage(language === 'English' ? 'Bangla' : 'English');
   };
 
   const addToHistory = (text: string) => {
@@ -278,18 +282,29 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ incrementStats, language, 
             <div>
               <h2 className="font-bold text-slate-800">JIGESHAI</h2>
               <div className="flex items-center gap-2">
-                <p className="text-xs text-slate-500">{language === 'English' ? 'Physics • Chem • Bio • Math' : 'পদার্থ • রসায়ন • জীববিজ্ঞান • গণিত'}</p>
+                <p className="text-xs text-slate-500">Sci • Math • ICT • Bangla • Eng</p>
               </div>
             </div>
           </div>
           
-          <button 
-            onClick={handleClearChat}
-            className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-            title="Clear Conversation"
-          >
-            <Trash2 size={18} />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+                onClick={toggleLanguage}
+                className="px-3 py-1.5 rounded-lg bg-slate-100 text-xs font-bold text-slate-600 border border-slate-200 hover:bg-slate-200 hover:text-slate-800 transition-colors flex items-center gap-1.5"
+                title="Switch Language"
+            >
+                <Globe size={14} className="text-primary-600" />
+                {language === 'English' ? 'ENG' : 'বাংলা'}
+            </button>
+
+            <button 
+                onClick={handleClearChat}
+                className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                title="Clear Conversation"
+            >
+                <Trash2 size={18} />
+            </button>
+          </div>
         </div>
 
         {/* Messages Area */}
