@@ -34,49 +34,33 @@ export enum AppTab {
   TRACKER = 'TRACKER',
   CHAT = 'CHAT',
   SUMMARIZER = 'SUMMARIZER',
-  PROFILE = 'PROFILE', // New tab for student profile/payment
+  PROFILE = 'PROFILE',
+  ADMIN_STATS = 'ADMIN_STATS',
   ADMIN_USERS = 'ADMIN_USERS',
-  ADMIN_PAYMENTS = 'ADMIN_PAYMENTS',
-  ADMIN_STATS = 'ADMIN_STATS'
+  ADMIN_PAYMENTS = 'ADMIN_PAYMENTS'
 }
-
-// --- Auth & Backend Types ---
-
-export type UserRole = 'admin' | 'student';
 
 export interface User {
   id: string;
-  email: string;
-  role: UserRole;
-  password?: string; // Stored in mock DB
-  
-  // Student Profile
-  name?: string;
-  collegeName?: string;
-  class?: '11' | '12';
-
-  // Premium
-  isPremium: boolean;
-  premiumPlan?: '1_month' | '3_months';
-  premiumExpiry?: string; // ISO Date string
-
-  // Usage Limits
-  questionsToday: number;
-  lastQuestionDate: string; // YYYY-MM-DD
-  joinedDate: string; // ISO Date
-  
-  // Account Status
+  name: string;
+  collegeName: string;
+  class: '11' | '12';
+  email?: string;
+  password?: string;
+  isPremium?: boolean;
   suspended?: boolean;
+  role?: 'student' | 'admin';
+  createdAt?: number;
 }
 
 export interface PaymentRequest {
   id: string;
   userId: string;
-  userEmail: string; // Snapshot for easier display
-  userName?: string;
-  amount: number;
+  userName: string;
+  userEmail: string;
   plan: '1_month' | '3_months';
+  amount: number;
   transactionId: string;
   status: 'pending' | 'approved' | 'rejected';
-  date: string; // ISO Date
+  timestamp: number;
 }

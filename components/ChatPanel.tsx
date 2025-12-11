@@ -2,11 +2,11 @@ import React, { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
-import { Send, Bot, User, Paperclip, X, FileText, AlertTriangle, Image as ImageIcon, Lock, Trash2, Bold, Italic, Code, Sigma, Eye, EyeOff, History, Clock } from 'lucide-react';
+import { Send, Bot, User, Paperclip, X, FileText, AlertTriangle, Image as ImageIcon, Trash2, Bold, Italic, Code, Sigma, Eye, EyeOff, History, Clock } from 'lucide-react';
 import { GlassCard, Button } from './UIComponents';
 import { ChatMessage } from '../types';
 import { createChatSession, fileToGenerativePart } from '../services/geminiService';
-import { getCurrentUser, checkQuestionLimit, incrementQuestionCount } from '../services/backend';
+import { getCurrentUser, incrementQuestionCount } from '../services/backend';
 import { Chat, Content } from '@google/genai';
 
 interface ChatPanelProps {
@@ -52,7 +52,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ incrementStats, language, 
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [attachment, setAttachment] = useState<File | null>(null);
-  const [limitStatus, setLimitStatus] = useState<{allowed: boolean, remaining: number | string}>({ allowed: true, remaining: 50 });
   const [showPreview, setShowPreview] = useState(false);
   
   const chatSessionRef = useRef<Chat | null>(null);
@@ -66,13 +65,8 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ incrementStats, language, 
     scrollToBottom();
   }, [messages]);
 
-  // Check limits and Initialize Chat Session with History
+  // Initialize Chat Session with History
   useEffect(() => {
-    const user = getCurrentUser();
-    if (user) {
-      setLimitStatus(checkQuestionLimit(user));
-    }
-
     try {
       // Reconstruct history for Gemini context
       const history: Content[] = messages
@@ -214,11 +208,8 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ incrementStats, language, 
       }
       
       const u = getCurrentUser();
-      if (u) {
-        incrementQuestionCount(u);
-        setLimitStatus(checkQuestionLimit(u));
-        incrementStats();
-      }
+      incrementQuestionCount(u);
+      incrementStats();
 
     } catch (error: any) {
       console.error("Chat error:", error);
@@ -244,13 +235,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ incrementStats, language, 
   };
 
   const handleSendMessage = async () => {
-    const u = getCurrentUser();
-    if (u) {
-      const status = checkQuestionLimit(u);
-      setLimitStatus(status);
-      if (!status.allowed) return; 
-    }
-
     if ((!input.trim() && !attachment) || !chatSessionRef.current) return;
 
     const currentText = input;
@@ -295,9 +279,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ incrementStats, language, 
               <h2 className="font-bold text-slate-800">JIGESHAI</h2>
               <div className="flex items-center gap-2">
                 <p className="text-xs text-slate-500">{language === 'English' ? 'Physics • Chem • Bio • Math' : 'পদার্থ • রসায়ন • জীববিজ্ঞান • গণিত'}</p>
-                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${!limitStatus.allowed ? 'bg-red-100 text-red-600' : 'bg-slate-100 text-slate-600'}`}>
-                  {limitStatus.allowed ? `${limitStatus.remaining} left` : 'Limit Reached'}
-                </span>
               </div>
             </div>
           </div>
@@ -412,16 +393,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ incrementStats, language, 
             </>
           )}
 
-          {!limitStatus.allowed ? (
-            <div className="flex flex-col items-center justify-center gap-2 p-4 bg-red-50 text-red-700 rounded-xl border border-red-100 text-center">
-              <div className="flex items-center gap-2">
-                <Lock size={16} />
-                <span className="text-sm font-bold">Daily Limit Reached (50/50)</span>
-              </div>
-              <p className="text-xs">Upgrade to Premium to continue asking questions today.</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
+          <div className="space-y-3">
                {/* Formatting Toolbar */}
                <div className="flex items-center justify-between px-1">
                   <div className="flex items-center gap-1">
@@ -512,7 +484,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ incrementStats, language, 
                 </Button>
               </div>
             </div>
-          )}
         </div>
       </div>
     </GlassCard>
